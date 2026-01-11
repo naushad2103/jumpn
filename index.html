@@ -2,42 +2,32 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>WebAR Walkable Character</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accurate WebXR Character Placement</title>
 
 <style>
-html,body{margin:0;padding:0;overflow:hidden;background:#000;font-family:system-ui}
-#container{position:fixed;inset:0}
-.ui{position:fixed;inset:0;pointer-events:none;color:#fff}
-.top{display:flex;justify-content:space-between;padding:14px}
-.box{background:rgba(0,0,0,.55);padding:10px 14px;border-radius:12px}
-.controls{position:absolute;bottom:20px;left:0;right:0;display:flex;justify-content:center;gap:10px;pointer-events:auto}
-.btn{padding:16px;border-radius:14px;border:none;background:rgba(255,255,255,.25);color:#fff;font-size:18px}
-.jump{background:linear-gradient(135deg,#22c55e,#16a34a)}
-.start{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:auto}
-.start button{padding:22px 30px;font-size:20px;border-radius:18px;border:none;color:#fff;background:linear-gradient(135deg,#3b82f6,#8b5cf6)}
+html,body{margin:0;overflow:hidden;background:#000;font-family:system-ui}
+#ui{position:fixed;inset:0;pointer-events:none;color:#fff}
+#start{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:auto}
+#start button{padding:20px 28px;font-size:20px;border-radius:18px;border:none;background:#2563eb;color:#fff}
+#hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);
+background:rgba(0,0,0,.6);padding:10px 14px;border-radius:14px}
+#controls{position:absolute;bottom:20px;left:0;right:0;display:flex;justify-content:center;gap:12px;pointer-events:auto}
+button.ctrl{padding:14px 18px;border-radius:14px;border:none;background:rgba(255,255,255,.25);color:#fff}
 .hidden{display:none}
 </style>
 </head>
 
 <body>
-<div id="container"></div>
-
-<div class="ui">
-  <div class="top">
-    <div class="box">Distance: <span id="score">0</span></div>
-    <div class="box" id="status">Scan floor or table…</div>
+<div id="ui">
+  <div id="hint">Move phone to detect surface</div>
+  <div id="controls" class="hidden">
+    <button class="ctrl" id="fwd">▲</button>
+    <button class="ctrl" id="left">◀</button>
+    <button class="ctrl" id="right">▶</button>
   </div>
-
-  <div class="controls hidden" id="controls">
-    <button class="btn" id="left">◀</button>
-    <button class="btn" id="forward">▲</button>
-    <button class="btn" id="right">▶</button>
-    <button class="btn jump" id="jump">JUMP</button>
-  </div>
-
-  <div class="start" id="start">
-    <button id="startBtn">▶ Start AR</button>
+  <div id="start">
+    <button id="startBtn">Start AR</button>
   </div>
 </div>
 
@@ -46,11 +36,8 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.m
 
 let scene,camera,renderer;
 let session,refSpace,viewerSpace,hitTestSource;
-let surfaceMesh,character;
-let placed=false,score=0;
-
-const keys={left:false,right:false,forward:false};
-const state={x:0,y:0,z:0,vx:0,vy:0,rot:0,onGround:false};
+let reticle,character;
+let placed=false;
 
 init();
 
@@ -61,43 +48,37 @@ function init(){
   renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});
   renderer.xr.enabled=true;
   renderer.setSize(innerWidth,innerHeight);
-  document.getElementById("container").appendChild(renderer.domElement);
+  document.body.appendChild(renderer.domElement);
 
-  scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.4));
+  scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.5));
 
-  createSurfacePreview();
+  createReticle();
   createCharacter();
 }
 
-function createSurfacePreview(){
-  surfaceMesh=new THREE.Mesh(
-    new THREE.PlaneGeometry(0.6,0.6),
-    new THREE.MeshBasicMaterial({
-      color:0x22c55e,
-      transparent:true,
-      opacity:0.35,
-      side:THREE.DoubleSide
-    })
-  );
-  surfaceMesh.rotation.x=-Math.PI/2;
-  surfaceMesh.visible=false;
-  scene.add(surfaceMesh);
+function createReticle(){
+  const geo=new THREE.RingGeometry(0.06,0.08,32);
+  const mat=new THREE.MeshBasicMaterial({color:0x22c55e});
+  reticle=new THREE.Mesh(geo,mat);
+  reticle.rotation.x=-Math.PI/2;
+  reticle.visible=false;
+  scene.add(reticle);
 }
 
 function createCharacter(){
   character=new THREE.Group();
 
   const body=new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.07,0.12,4,8),
-    new THREE.MeshStandardMaterial({color:0x22c55e})
+    new THREE.CylinderGeometry(0.06,0.06,0.14,16),
+    new THREE.MeshStandardMaterial({color:0x3b82f6})
   );
-  body.position.y=0.12;
+  body.position.y=0.07;
 
   const head=new THREE.Mesh(
-    new THREE.SphereGeometry(0.06,16,16),
-    new THREE.MeshStandardMaterial({color:0x10b981})
+    new THREE.SphereGeometry(0.05,16,16),
+    new THREE.MeshStandardMaterial({color:0xfbbf24})
   );
-  head.position.y=0.23;
+  head.position.y=0.15;
 
   character.add(body,head);
   character.visible=false;
@@ -116,81 +97,38 @@ async function startAR(){
   viewerSpace=await session.requestReferenceSpace("viewer");
   hitTestSource=await session.requestHitTestSource({space:viewerSpace});
 
-  renderer.setAnimationLoop(onXRFrame);
+  renderer.setAnimationLoop(onFrame);
   document.getElementById("start").classList.add("hidden");
 
   session.addEventListener("select",placeCharacter);
 }
 
-function onXRFrame(t,frame){
+function onFrame(t,frame){
   const hits=frame.getHitTestResults(hitTestSource);
   if(hits.length>0 && !placed){
     const pose=hits[0].getPose(refSpace);
-    surfaceMesh.visible=true;
-    surfaceMesh.position.set(
+    reticle.visible=true;
+    reticle.position.set(
       pose.transform.position.x,
       pose.transform.position.y,
       pose.transform.position.z
     );
   }
-
-  updateCharacter();
   renderer.render(scene,camera);
 }
 
 function placeCharacter(){
-  if(!surfaceMesh.visible||placed) return;
+  if(!reticle.visible || placed) return;
   placed=true;
 
-  state.x=surfaceMesh.position.x;
-  state.y=surfaceMesh.position.y+0.14;
-  state.z=surfaceMesh.position.z;
-
+  character.position.copy(reticle.position);
   character.visible=true;
+
   document.getElementById("controls").classList.remove("hidden");
-  document.getElementById("status").textContent="Character placed ✔ Tap buttons to move";
-}
-
-function updateCharacter(){
-  if(!placed) return;
-
-  const speed=0.012,gravity=0.005;
-
-  if(keys.left) state.rot+=0.05;
-  if(keys.right) state.rot-=0.05;
-  if(keys.forward){
-    state.vx-=Math.sin(state.rot)*speed;
-    state.vz-=Math.cos(state.rot)*speed;
-  }
-
-  state.vy-=gravity;
-  state.x+=state.vx;
-  state.y+=state.vy;
-  state.z+=state.vz;
-
-  state.vx*=0.85;
-  state.vz*=0.85;
-
-  const groundY=surfaceMesh.position.y+0.14;
-  if(state.y<groundY){
-    state.y=groundY;
-    state.vy=0;
-    state.onGround=true;
-  }
-
-  character.position.set(state.x,state.y,state.z);
-  character.rotation.y=state.rot;
-
-  document.getElementById("score").textContent=score++;
+  document.getElementById("hint").textContent="Character placed ✔";
 }
 
 document.getElementById("startBtn").onclick=startAR;
-document.getElementById("jump").onclick=()=>state.onGround&&(state.vy=0.09);
-
-["left","right","forward"].forEach(k=>{
-  document.getElementById(k).onpointerdown=()=>keys[k]=true;
-  document.getElementById(k).onpointerup=()=>keys[k]=false;
-});
 </script>
 </body>
 </html>
