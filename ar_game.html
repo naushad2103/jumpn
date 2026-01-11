@@ -17,13 +17,12 @@
       background: #000;
     }
 
-    #ar-canvas {
+    #container {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      touch-action: none;
     }
 
     .ui-overlay {
@@ -254,7 +253,7 @@
   </style>
 </head>
 <body>
-  <canvas id="ar-canvas"></canvas>
+  <div id="container"></div>
 
   <div class="ui-overlay">
     <div class="header">
@@ -311,6 +310,7 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
     // Game state
     const state = {
@@ -323,18 +323,24 @@
         rotation: 0,
         size: 0.15,
         isJumping: false,
-        onGround: true
+        onGround: true,
+        mesh: null
       },
       surfaces: [],
+      surfaceMeshes: [],
       keysPressed: {},
       session: null,
-      gl: null,
-      animationFrame: null
+      renderer: null,
+      scene: null,
+      camera: null,
+      animationFrame: null,
+      hitTestSource: null,
+      referenceSpace: null
     };
 
     // DOM elements
     const elements = {
-      canvas: document.getElementById('ar-canvas'),
+      container: document.getElementById('container'),
       score: document.getElementById('score'),
       message: document.getElementById('message'),
       status: document.getElementById('status'),
@@ -351,6 +357,98 @@
       btnLeft: document.getElementById('btn-left'),
       btnRight: document.getElementById('btn-right')
     };
+
+    // Initialize Three.js
+    function initThree() {
+      state.scene = new THREE.Scene();
+      state.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+      
+      state.renderer = new THREE.WebGLRenderer({ 
+        antialias: true,
+        alpha: true
+      });
+      state.renderer.setPixelRatio(window.devicePixelRatio);
+      state.renderer.setSize(window.innerWidth, window.innerHeight);
+      state.renderer.xr.enabled = true;
+      elements.container.appendChild(state.renderer.domElement);
+
+      // Add lighting
+      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+      state.scene.add(light);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+      directionalLight.position.set(1, 2, 1);
+      state.scene.add(directionalLight);
+
+      // Create character (cute robot-like character)
+      createCharacter();
+    }
+
+    function createCharacter() {
+      const character = new THREE.Group();
+      
+      // Body (green cube)
+      const bodyGeometry = new THREE.BoxGeometry(0.12, 0.15, 0.1);
+      const bodyMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x22c55e,
+        metalness: 0.3,
+        roughness: 0.7
+      });
+      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      body.position.y = 0.075;
+      character.add(body);
+
+      // Head (smaller cube on top)
+      const headGeometry = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+      const headMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x10b981,
+        metalness: 0.3,
+        roughness: 0.7
+      });
+      const head = new THREE.Mesh(headGeometry, headMaterial);
+      head.position.y = 0.19;
+      character.add(head);
+
+      // Eyes (white spheres)
+      const eyeGeometry = new THREE.SphereGeometry(0.015, 8, 8);
+      const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+      
+      const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+      leftEye.position.set(-0.02, 0.2, 0.04);
+      character.add(leftEye);
+      
+      const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+      rightEye.position.set(0.02, 0.2, 0.04);
+      character.add(rightEye);
+
+      // Arms
+      const armGeometry = new THREE.BoxGeometry(0.04, 0.12, 0.04);
+      const armMaterial = new THREE.MeshStandardMaterial({ color: 0x22c55e });
+      
+      const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+      leftArm.position.set(-0.08, 0.08, 0);
+      character.add(leftArm);
+      
+      const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+      rightArm.position.set(0.08, 0.08, 0);
+      character.add(rightArm);
+
+      // Legs
+      const legGeometry = new THREE.BoxGeometry(0.04, 0.08, 0.04);
+      const legMaterial = new THREE.MeshStandardMaterial({ color: 0x10b981 });
+      
+      const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
+      leftLeg.position.set(-0.03, -0.04, 0);
+      character.add(leftLeg);
+      
+      const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
+      rightLeg.position.set(0.03, -0.04, 0);
+      character.add(rightLeg);
+
+      character.visible = false;
+      state.character.mesh = character;
+      state.scene.add(character);
+    }
 
     // Check AR support
     async function checkARSupport() {
@@ -394,15 +492,16 @@
           domOverlay: { root: document.body }
         });
 
-        state.gl = elements.canvas.getContext('webgl', { xrCompatible: true });
-        await state.gl.makeXRCompatible();
+        state.session.updateRenderState({
+          baseLayer: new XRWebGLLayer(state.session, state.renderer.getContext())
+        });
 
-        const layer = new XRWebGLLayer(state.session, state.gl);
-        await state.session.updateRenderState({ baseLayer: layer });
-
-        const referenceSpace = await state.session.requestReferenceSpace('local');
+        state.referenceSpace = await state.session.requestReferenceSpace('local');
         const viewerSpace = await state.session.requestReferenceSpace('viewer');
-        const hitTestSource = await state.session.requestHitTestSource({ space: viewerSpace });
+        state.hitTestSource = await state.session.requestHitTestSource({ space: viewerSpace });
+
+        state.renderer.xr.setReferenceSpaceType('local');
+        state.renderer.xr.setSession(state.session);
 
         state.arActive = true;
         elements.startSection.classList.add('hidden');
@@ -414,60 +513,81 @@
           endAR();
         });
 
-        function onXRFrame(time, frame) {
-          state.animationFrame = state.session.requestAnimationFrame(onXRFrame);
-
-          const pose = frame.getViewerPose(referenceSpace);
-          if (!pose) return;
-
-          const hitTestResults = frame.getHitTestResults(hitTestSource);
-          if (hitTestResults.length > 0) {
-            const hit = hitTestResults[0];
-            const hitPose = hit.getPose(referenceSpace);
-
-            const surfaceExists = state.surfaces.some(s =>
-              Math.abs(s.x - hitPose.transform.position.x) < 0.15 &&
-              Math.abs(s.z - hitPose.transform.position.z) < 0.15
-            );
-
-            if (!surfaceExists) {
-              const surface = {
-                x: hitPose.transform.position.x,
-                y: hitPose.transform.position.y,
-                z: hitPose.transform.position.z,
-                width: 0.3,
-                height: 0.05
-              };
-              state.surfaces.push(surface);
-
-              if (!state.characterPlaced) {
-                state.character.x = surface.x;
-                state.character.y = surface.y + state.character.size;
-                state.character.z = surface.z;
-                state.characterPlaced = true;
-                elements.status.classList.remove('hidden');
-                elements.controls.classList.remove('hidden');
-                elements.crosshair.classList.add('hidden');
-                showMessage('Character placed! Use controls to move', 2000);
-              }
-            }
-          }
-
-          const view = pose.views[0];
-          const viewport = state.session.renderState.baseLayer.getViewport(view);
-          state.gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-
-          state.gl.clearColor(0, 0, 0, 0);
-          state.gl.clear(state.gl.COLOR_BUFFER_BIT | state.gl.DEPTH_BUFFER_BIT);
-          state.gl.enable(state.gl.DEPTH_TEST);
-
-          updateCharacter();
-        }
-
-        state.session.requestAnimationFrame(onXRFrame);
+        state.renderer.setAnimationLoop(onXRFrame);
       } catch (err) {
         showMessage('Failed to start AR: ' + err.message);
+        console.error(err);
       }
+    }
+
+    // XR Frame loop
+    function onXRFrame(timestamp, frame) {
+      if (!frame || !state.session) return;
+
+      const pose = frame.getViewerPose(state.referenceSpace);
+      if (!pose) return;
+
+      // Hit testing for surface detection
+      if (state.hitTestSource) {
+        const hitTestResults = frame.getHitTestResults(state.hitTestSource);
+        if (hitTestResults.length > 0 && !state.characterPlaced) {
+          const hit = hitTestResults[0];
+          const hitPose = hit.getPose(state.referenceSpace);
+
+          if (hitPose) {
+            const position = hitPose.transform.position;
+            
+            // Place character
+            state.character.x = position.x;
+            state.character.y = position.y + state.character.size;
+            state.character.z = position.z;
+            state.characterPlaced = true;
+            
+            state.character.mesh.visible = true;
+            elements.status.classList.remove('hidden');
+            elements.controls.classList.remove('hidden');
+            elements.crosshair.classList.add('hidden');
+            showMessage('Character placed! Use controls to move', 2000);
+
+            // Create surface indicator
+            const surfaceGeometry = new THREE.CircleGeometry(0.3, 32);
+            const surfaceMaterial = new THREE.MeshBasicMaterial({ 
+              color: 0x22c55e,
+              transparent: true,
+              opacity: 0.3,
+              side: THREE.DoubleSide
+            });
+            const surface = new THREE.Mesh(surfaceGeometry, surfaceMaterial);
+            surface.rotation.x = -Math.PI / 2;
+            surface.position.set(position.x, position.y, position.z);
+            state.scene.add(surface);
+            state.surfaceMeshes.push(surface);
+            
+            state.surfaces.push({
+              x: position.x,
+              y: position.y,
+              z: position.z,
+              width: 0.3
+            });
+          }
+        }
+      }
+
+      // Update character physics and position
+      updateCharacter();
+      
+      // Update character mesh position
+      if (state.character.mesh) {
+        state.character.mesh.position.set(
+          state.character.x,
+          state.character.y,
+          state.character.z
+        );
+        state.character.mesh.rotation.y = state.character.rotation;
+      }
+
+      // Render
+      state.renderer.render(state.scene, state.camera);
     }
 
     // Update character physics
@@ -524,7 +644,7 @@
         }
       }
 
-      if (char.y < 0) {
+      if (char.y < -1) {
         char.y = char.size;
         char.vy = 0;
         char.onGround = true;
@@ -546,11 +666,16 @@
         state.session.end();
         state.session = null;
       }
-      if (state.animationFrame) {
-        cancelAnimationFrame(state.animationFrame);
-      }
+      state.renderer.setAnimationLoop(null);
       state.arActive = false;
       state.characterPlaced = false;
+      state.character.mesh.visible = false;
+      
+      // Remove surface meshes
+      state.surfaceMeshes.forEach(mesh => state.scene.remove(mesh));
+      state.surfaceMeshes = [];
+      state.surfaces = [];
+      
       elements.controls.classList.add('hidden');
       elements.status.classList.add('hidden');
       elements.startSection.classList.remove('hidden');
@@ -575,6 +700,7 @@
       });
       btn.addEventListener('mousedown', () => state.keysPressed[key] = true);
       btn.addEventListener('mouseup', () => state.keysPressed[key] = false);
+      btn.addEventListener('mouseleave', () => state.keysPressed[key] = false);
     }
 
     setupButton(elements.btnForward, 'forward');
@@ -583,6 +709,7 @@
     setupButton(elements.btnRight, 'right');
 
     // Initialize
+    initThree();
     checkARSupport();
   </script>
 </body>
