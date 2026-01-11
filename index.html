@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WebAR Cartoon Game</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>WebAR Walkable Character</title>
 
 <style>
 html,body{margin:0;padding:0;overflow:hidden;background:#000;font-family:system-ui}
@@ -26,7 +26,7 @@ html,body{margin:0;padding:0;overflow:hidden;background:#000;font-family:system-
 <div class="ui">
   <div class="top">
     <div class="box">Distance: <span id="score">0</span></div>
-    <div class="box" id="status">Tap to place character</div>
+    <div class="box" id="status">Scan floor or table…</div>
   </div>
 
   <div class="controls hidden" id="controls">
@@ -45,8 +45,8 @@ html,body{margin:0;padding:0;overflow:hidden;background:#000;font-family:system-
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
 
 let scene,camera,renderer;
-let xrSession,refSpace,viewerSpace,hitTestSource;
-let reticle,character,occluder;
+let session,refSpace,viewerSpace,hitTestSource;
+let surfaceMesh,character;
 let placed=false,score=0;
 
 const keys={left:false,right:false,forward:false};
@@ -65,17 +65,23 @@ function init(){
 
   scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.4));
 
-  createReticle();
+  createSurfacePreview();
   createCharacter();
-  createOccluder();
 }
 
-function createReticle(){
-  const geo=new THREE.RingGeometry(0.07,0.09,32).rotateX(-Math.PI/2);
-  const mat=new THREE.MeshBasicMaterial({color:0x22c55e});
-  reticle=new THREE.Mesh(geo,mat);
-  reticle.visible=false;
-  scene.add(reticle);
+function createSurfacePreview(){
+  surfaceMesh=new THREE.Mesh(
+    new THREE.PlaneGeometry(0.6,0.6),
+    new THREE.MeshBasicMaterial({
+      color:0x22c55e,
+      transparent:true,
+      opacity:0.35,
+      side:THREE.DoubleSide
+    })
+  );
+  surfaceMesh.rotation.x=-Math.PI/2;
+  surfaceMesh.visible=false;
+  scene.add(surfaceMesh);
 }
 
 function createCharacter(){
@@ -98,73 +104,57 @@ function createCharacter(){
   scene.add(character);
 }
 
-function createOccluder(){
-  const geo=new THREE.PlaneGeometry(5,5);
-  const mat=new THREE.MeshStandardMaterial({
-    colorWrite:false
-  });
-  occluder=new THREE.Mesh(geo,mat);
-  occluder.rotation.x=-Math.PI/2;
-  occluder.visible=false;
-  scene.add(occluder);
-}
-
 async function startAR(){
-  xrSession=await navigator.xr.requestSession("immersive-ar",{
+  session=await navigator.xr.requestSession("immersive-ar",{
     requiredFeatures:["hit-test"],
-    optionalFeatures:["depth-sensing","dom-overlay","local-floor"],
+    optionalFeatures:["local-floor","dom-overlay"],
     domOverlay:{root:document.body}
   });
 
-  renderer.xr.setSession(xrSession);
-  refSpace=await xrSession.requestReferenceSpace("local-floor");
-  viewerSpace=await xrSession.requestReferenceSpace("viewer");
-  hitTestSource=await xrSession.requestHitTestSource({space:viewerSpace});
+  renderer.xr.setSession(session);
+  refSpace=await session.requestReferenceSpace("local-floor");
+  viewerSpace=await session.requestReferenceSpace("viewer");
+  hitTestSource=await session.requestHitTestSource({space:viewerSpace});
 
   renderer.setAnimationLoop(onXRFrame);
   document.getElementById("start").classList.add("hidden");
 
-  xrSession.addEventListener("select",placeCharacter);
+  session.addEventListener("select",placeCharacter);
 }
 
 function onXRFrame(t,frame){
-  const hitResults=frame.getHitTestResults(hitTestSource);
-  if(hitResults.length>0 && !placed){
-    const pose=hitResults[0].getPose(refSpace);
-    reticle.visible=true;
-    reticle.position.set(
+  const hits=frame.getHitTestResults(hitTestSource);
+  if(hits.length>0 && !placed){
+    const pose=hits[0].getPose(refSpace);
+    surfaceMesh.visible=true;
+    surfaceMesh.position.set(
       pose.transform.position.x,
       pose.transform.position.y,
       pose.transform.position.z
     );
   }
+
   updateCharacter();
   renderer.render(scene,camera);
 }
 
 function placeCharacter(){
-  if(!reticle.visible||placed) return;
+  if(!surfaceMesh.visible||placed) return;
   placed=true;
 
-  state.x=reticle.position.x;
-  state.y=reticle.position.y+0.14;
-  state.z=reticle.position.z;
+  state.x=surfaceMesh.position.x;
+  state.y=surfaceMesh.position.y+0.14;
+  state.z=surfaceMesh.position.z;
 
   character.visible=true;
-  reticle.visible=false;
-
-  occluder.position.set(state.x,state.y-0.14,state.z);
-  occluder.visible=true;
-
   document.getElementById("controls").classList.remove("hidden");
-  document.getElementById("status").textContent="Character placed ✔";
+  document.getElementById("status").textContent="Character placed ✔ Tap buttons to move";
 }
 
 function updateCharacter(){
   if(!placed) return;
 
-  const speed=0.012;
-  const gravity=0.005;
+  const speed=0.012,gravity=0.005;
 
   if(keys.left) state.rot+=0.05;
   if(keys.right) state.rot-=0.05;
@@ -181,16 +171,17 @@ function updateCharacter(){
   state.vx*=0.85;
   state.vz*=0.85;
 
-  if(state.y<occluder.position.y+0.14){
-    state.y=occluder.position.y+0.14;
+  const groundY=surfaceMesh.position.y+0.14;
+  if(state.y<groundY){
+    state.y=groundY;
     state.vy=0;
     state.onGround=true;
   }
 
   character.position.set(state.x,state.y,state.z);
   character.rotation.y=state.rot;
-  score++;
-  document.getElementById("score").textContent=score;
+
+  document.getElementById("score").textContent=score++;
 }
 
 document.getElementById("startBtn").onclick=startAR;
