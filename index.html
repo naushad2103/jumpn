@@ -2,85 +2,22 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
 <title>WebAR Cartoon Character</title>
 
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  background: #000;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont;
-}
-
-#container {
-  position: fixed;
-  inset: 0;
-}
-
-.ui {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-}
-
-.top {
-  display: flex;
-  justify-content: space-between;
-  padding: 16px;
-  color: #fff;
-}
-
-.box {
-  background: rgba(0,0,0,0.5);
-  padding: 10px 16px;
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-}
-
-.controls {
-  position: absolute;
-  bottom: 20px;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  pointer-events: auto;
-}
-
-.btn {
-  background: rgba(255,255,255,0.2);
-  color: #fff;
-  border: none;
-  padding: 18px;
-  font-size: 18px;
-  border-radius: 14px;
-}
-
-.jump {
-  background: linear-gradient(135deg,#22c55e,#16a34a);
-}
-
-.start {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: auto;
-}
-
-.start button {
-  padding: 22px 28px;
-  font-size: 20px;
-  border-radius: 18px;
-  border: none;
-  color: #fff;
-  background: linear-gradient(135deg,#3b82f6,#8b5cf6);
-}
-.hidden { display: none; }
+html,body { margin:0; padding:0; overflow:hidden; background:#000; font-family:system-ui }
+#container { position:fixed; inset:0 }
+.ui { position:fixed; inset:0; pointer-events:none; color:#fff }
+.top { display:flex; justify-content:space-between; padding:14px }
+.box { background:rgba(0,0,0,.55); padding:10px 14px; border-radius:12px }
+.controls { position:absolute; bottom:20px; left:0; right:0; display:flex; justify-content:center; gap:10px; pointer-events:auto }
+.btn { padding:16px; border-radius:14px; border:none; background:rgba(255,255,255,.25); color:#fff; font-size:18px }
+.jump { background:linear-gradient(135deg,#22c55e,#16a34a) }
+.start { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:auto }
+.start button { padding:22px 30px; font-size:20px; border-radius:18px; border:none; color:#fff;
+  background:linear-gradient(135deg,#3b82f6,#8b5cf6) }
+.hidden { display:none }
 </style>
 </head>
 
@@ -89,7 +26,7 @@ html, body {
 
 <div class="ui">
   <div class="top">
-    <div class="box">Distance: <span id="score">0</span></div>
+    <div class="box">Score: <span id="score">0</span></div>
     <div class="box" id="status">Searching surface…</div>
   </div>
 
@@ -105,40 +42,33 @@ html, body {
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
 
-<script>
 let scene, camera, renderer;
 let xrSession, refSpace;
 let planes = new Map();
 let surfaces = [];
-let character;
-let score = 0;
+let character, score = 0;
 
 const keys = { left:false, right:false, forward:false };
+const state = { x:0, y:0, z:0, vx:0, vy:0, rot:0, onGround:false };
 
-const state = {
-  x:0, y:0, z:0,
-  vx:0, vy:0,
-  rot:0,
-  onGround:false
-};
+init();
 
-async function init() {
+function init(){
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera();
-
   renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true });
   renderer.xr.enabled = true;
   renderer.setSize(innerWidth, innerHeight);
   document.getElementById("container").appendChild(renderer.domElement);
 
-  scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.2));
-
-  createCartoonCharacter();
+  scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.3));
+  createCharacter();
 }
 
-function createCartoonCharacter() {
+function createCharacter(){
   character = new THREE.Group();
 
   const body = new THREE.Mesh(
@@ -146,92 +76,72 @@ function createCartoonCharacter() {
     new THREE.MeshStandardMaterial({ color:0x22c55e })
   );
   body.position.y = 0.12;
-  character.add(body);
 
   const head = new THREE.Mesh(
     new THREE.SphereGeometry(0.06,16,16),
     new THREE.MeshStandardMaterial({ color:0x10b981 })
   );
   head.position.y = 0.23;
-  character.add(head);
 
-  const eyeMat = new THREE.MeshBasicMaterial({ color:0xffffff });
   const eyeGeo = new THREE.SphereGeometry(0.01,8,8);
+  const eyeMat = new THREE.MeshBasicMaterial({ color:0xffffff });
 
   const e1 = new THREE.Mesh(eyeGeo,eyeMat);
-  e1.position.set(-0.02,0.24,0.05);
   const e2 = e1.clone();
-  e2.position.x = 0.02;
+  e1.position.set(-0.02,0.24,0.05);
+  e2.position.set( 0.02,0.24,0.05);
 
-  character.add(e1,e2);
+  character.add(body, head, e1, e2);
   character.visible = false;
   scene.add(character);
 }
 
-async function startAR() {
+async function startAR(){
   xrSession = await navigator.xr.requestSession("immersive-ar", {
-    requiredFeatures:["plane-detection","local-floor","dom-overlay"],
-    domOverlay:{ root:document.body }
+    requiredFeatures: ["hit-test"],
+    optionalFeatures: ["plane-detection","local-floor","dom-overlay"],
+    domOverlay: { root: document.body }
   });
 
   renderer.xr.setSession(xrSession);
   refSpace = await xrSession.requestReferenceSpace("local-floor");
+  renderer.setAnimationLoop(onXRFrame);
 
   document.getElementById("start").classList.add("hidden");
   document.getElementById("controls").classList.remove("hidden");
-
-  renderer.setAnimationLoop(onXRFrame);
 }
 
-function onXRFrame(t, frame) {
+function onXRFrame(t, frame){
   detectPlanes(frame);
   updateCharacter();
   renderer.render(scene,camera);
 }
 
-function detectPlanes(frame) {
+function detectPlanes(frame){
+  if(!frame.detectedPlanes) return;
+
   frame.detectedPlanes.forEach(plane=>{
     if(planes.has(plane)) return;
-
     const pose = frame.getPose(plane.planeSpace, refSpace);
     if(!pose) return;
 
     const shape = new THREE.Shape();
-    plane.polygon.forEach((p,i)=>{
-      i===0 ? shape.moveTo(p.x,p.z) : shape.lineTo(p.x,p.z);
-    });
+    plane.polygon.forEach((p,i)=> i?shape.lineTo(p.x,p.z):shape.moveTo(p.x,p.z));
 
     const mesh = new THREE.Mesh(
       new THREE.ShapeGeometry(shape),
-      new THREE.MeshBasicMaterial({
-        color:0x22c55e,
-        transparent:true,
-        opacity:0.35,
-        side:THREE.DoubleSide
-      })
+      new THREE.MeshBasicMaterial({ color:0x22c55e, transparent:true, opacity:0.35, side:THREE.DoubleSide })
     );
 
     mesh.rotation.x = -Math.PI/2;
-    mesh.position.set(
-      pose.transform.position.x,
-      pose.transform.position.y,
-      pose.transform.position.z
-    );
-
+    mesh.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
     scene.add(mesh);
-    planes.set(plane,mesh);
+    planes.set(plane, mesh);
 
-    surfaces.push({
-      y: mesh.position.y,
-      x: mesh.position.x,
-      z: mesh.position.z,
-      r:0.6
-    });
+    surfaces.push({ y: mesh.position.y });
 
     if(!character.visible){
-      state.x = mesh.position.x;
       state.y = mesh.position.y + 0.14;
-      state.z = mesh.position.z;
       character.visible = true;
       document.getElementById("status").textContent = "Character placed ✔";
     }
@@ -249,44 +159,28 @@ function updateCharacter(){
   }
 
   state.vy -= 0.004;
-  state.x += state.vx;
-  state.y += state.vy;
-  state.z += state.vz;
+  state.x += state.vx; state.y += state.vy; state.z += state.vz;
+  state.vx *= 0.9; state.vz *= 0.9;
 
-  state.vx *= 0.9;
-  state.vz *= 0.9;
-
-  state.onGround = false;
   surfaces.forEach(s=>{
-    if(Math.abs(state.y - (s.y+0.14)) < 0.02){
-      state.y = s.y+0.14;
-      state.vy = 0;
-      state.onGround = true;
+    if(Math.abs(state.y-(s.y+0.14))<0.02){
+      state.y=s.y+0.14; state.vy=0; state.onGround=true;
     }
   });
 
   character.position.set(state.x,state.y,state.z);
   character.rotation.y = state.rot;
 
-  score++;
-  document.getElementById("score").textContent = score;
-}
-
-function jump(){
-  if(state.onGround){
-    state.vy = 0.08;
-  }
+  document.getElementById("score").textContent = score++;
 }
 
 document.getElementById("startBtn").onclick = startAR;
-document.getElementById("jump").onclick = jump;
+document.getElementById("jump").onclick = ()=> state.onGround && (state.vy=0.08);
 
 ["left","right","forward"].forEach(k=>{
   document.getElementById(k).onpointerdown=()=>keys[k]=true;
   document.getElementById(k).onpointerup=()=>keys[k]=false;
 });
-
-init();
 </script>
 </body>
 </html>
