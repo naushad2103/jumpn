@@ -1,777 +1,292 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AR Character Game</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WebAR Cartoon Character</title>
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      overflow: hidden;
-      background: #000;
-    }
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont;
+}
 
-    #container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-    }
+#container {
+  position: fixed;
+  inset: 0;
+}
 
-    .ui-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      pointer-events: none;
-      z-index: 10;
-    }
+.ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
 
-    .header {
-      padding: 20px;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+.top {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px;
+  color: #fff;
+}
 
-    .score-box {
-      background: rgba(255,255,255,0.2);
-      backdrop-filter: blur(10px);
-      padding: 12px 20px;
-      border-radius: 15px;
-      color: white;
-    }
+.box {
+  background: rgba(0,0,0,0.5);
+  padding: 10px 16px;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
 
-    .score-label {
-      font-size: 12px;
-      opacity: 0.7;
-    }
+.controls {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: auto;
+}
 
-    .score-value {
-      font-size: 28px;
-      font-weight: bold;
-    }
+.btn {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  border: none;
+  padding: 18px;
+  font-size: 18px;
+  border-radius: 14px;
+}
 
-    .status-box {
-      background: rgba(34,197,94,0.3);
-      backdrop-filter: blur(10px);
-      padding: 8px 16px;
-      border-radius: 12px;
-      color: white;
-      font-size: 14px;
-    }
+.jump {
+  background: linear-gradient(135deg,#22c55e,#16a34a);
+}
 
-    .message {
-      position: absolute;
-      top: 120px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255,255,255,0.2);
-      backdrop-filter: blur(10px);
-      padding: 12px 24px;
-      border-radius: 12px;
-      color: white;
-      font-size: 14px;
-      max-width: 80%;
-      text-align: center;
-    }
+.start {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
 
-    .controls {
-      position: absolute;
-      bottom: 20px;
-      left: 0;
-      right: 0;
-      padding: 0 20px;
-      pointer-events: auto;
-      display: flex;
-      gap: 15px;
-      align-items: flex-end;
-    }
-
-    .dpad {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      flex: 1;
-      max-width: 300px;
-    }
-
-    .control-btn {
-      background: rgba(255,255,255,0.2);
-      backdrop-filter: blur(10px);
-      border: none;
-      color: white;
-      font-size: 18px;
-      padding: 16px;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: all 0.15s;
-      touch-action: manipulation;
-      user-select: none;
-    }
-
-    .control-btn:active {
-      background: rgba(255,255,255,0.4);
-      transform: scale(0.95);
-    }
-
-    .jump-btn {
-      background: linear-gradient(135deg, #fbbf24, #f97316);
-      padding: 20px 28px;
-      border-radius: 50%;
-      font-weight: bold;
-      font-size: 16px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-    }
-
-    .jump-btn:active {
-      transform: scale(0.9);
-    }
-
-    .stop-btn {
-      background: rgba(239,68,68,0.8);
-      padding: 16px 24px;
-      border-radius: 12px;
-      font-weight: bold;
-    }
-
-    .start-section {
-      position: absolute;
-      bottom: 30px;
-      left: 30px;
-      right: 30px;
-      pointer-events: auto;
-    }
-
-    .start-btn {
-      width: 100%;
-      background: linear-gradient(to right, #3b82f6, #8b5cf6);
-      border: none;
-      color: white;
-      font-size: 18px;
-      font-weight: bold;
-      padding: 24px;
-      border-radius: 20px;
-      cursor: pointer;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      transition: transform 0.2s;
-    }
-
-    .start-btn:hover {
-      transform: scale(1.02);
-    }
-
-    .instructions {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(255,255,255,0.1);
-      backdrop-filter: blur(20px);
-      padding: 40px;
-      border-radius: 24px;
-      max-width: 500px;
-      color: white;
-    }
-
-    .instructions h1 {
-      font-size: 32px;
-      margin-bottom: 20px;
-      text-align: center;
-    }
-
-    .instructions p {
-      margin: 12px 0;
-      line-height: 1.6;
-    }
-
-    .error-screen {
-      position: fixed;
-      inset: 0;
-      background: linear-gradient(135deg, #1e1b4b, #581c87);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-
-    .error-box {
-      background: rgba(255,255,255,0.1);
-      backdrop-filter: blur(20px);
-      padding: 40px;
-      border-radius: 24px;
-      max-width: 500px;
-      color: white;
-      text-align: center;
-    }
-
-    .error-icon {
-      font-size: 64px;
-      margin-bottom: 20px;
-    }
-
-    .crosshair {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 48px;
-      height: 48px;
-      border: 4px solid #22c55e;
-      border-radius: 50%;
-      opacity: 0.5;
-      animation: pulse 2s infinite;
-    }
-
-    .crosshair::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 8px;
-      height: 8px;
-      background: #22c55e;
-      border-radius: 50%;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
-      50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.1); }
-    }
-
-    .hidden { display: none !important; }
-  </style>
+.start button {
+  padding: 22px 28px;
+  font-size: 20px;
+  border-radius: 18px;
+  border: none;
+  color: #fff;
+  background: linear-gradient(135deg,#3b82f6,#8b5cf6);
+}
+.hidden { display: none; }
+</style>
 </head>
+
 <body>
-  <div id="container"></div>
+<div id="container"></div>
 
-  <div class="ui-overlay">
-    <div class="header">
-      <div class="score-box">
-        <div class="score-label">Distance</div>
-        <div class="score-value" id="score">0</div>
-      </div>
-      <div class="status-box hidden" id="status">✓ Character Active</div>
-    </div>
-
-    <div class="message hidden" id="message"></div>
-
-    <div class="controls hidden" id="controls">
-      <div class="dpad">
-        <div></div>
-        <button class="control-btn" id="btn-forward">▲</button>
-        <div></div>
-        <button class="control-btn" id="btn-left">◀</button>
-        <button class="control-btn" id="btn-backward">▼</button>
-        <button class="control-btn" id="btn-right">▶</button>
-      </div>
-      <button class="control-btn jump-btn" id="btn-jump">JUMP</button>
-      <button class="control-btn stop-btn" id="btn-stop">Stop</button>
-    </div>
-
-    <div class="start-section" id="start-section">
-      <button class="start-btn" id="btn-start">▶ Start AR Character Game</button>
-    </div>
-
-    <div class="instructions" id="instructions">
-      <h1>AR Character Game</h1>
-      <p>🎮 Control a 3D character in AR</p>
-      <p>📱 Point camera at floor/table</p>
-      <p>🤖 Character auto-places on surface</p>
-      <p>⬆️ Use D-pad to move around</p>
-      <p>🦘 Jump button to leap</p>
-      <p>🧱 Collides with real objects</p>
-      <p>🏃 Walk on detected surfaces</p>
-    </div>
-
-    <div class="crosshair hidden" id="crosshair"></div>
+<div class="ui">
+  <div class="top">
+    <div class="box">Distance: <span id="score">0</span></div>
+    <div class="box" id="status">Searching surface…</div>
   </div>
 
-  <div class="error-screen hidden" id="error-screen">
-    <div class="error-box">
-      <div class="error-icon">⚠️</div>
-      <h2 style="font-size: 24px; margin-bottom: 16px;">AR Not Supported</h2>
-      <p style="margin-bottom: 12px;">WebAR requires a compatible device and browser. Please try:</p>
-      <ul style="text-align: left; margin-left: 20px; line-height: 1.8;">
-        <li>Android phone with ARCore support</li>
-        <li>Chrome or Edge browser</li>
-        <li>HTTPS connection</li>
-      </ul>
-    </div>
+  <div class="controls hidden" id="controls">
+    <button class="btn" id="left">◀</button>
+    <button class="btn" id="forward">▲</button>
+    <button class="btn" id="right">▶</button>
+    <button class="btn jump" id="jump">JUMP</button>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script>
-    // Game state
-    const state = {
-      arActive: false,
-      characterPlaced: false,
-      placeTimer: null,
-      score: 0,
-      character: {
-        x: 0, y: 0, z: -1,
-        vx: 0, vy: 0, vz: 0,
-        rotation: 0,
-        size: 0.15,
-        isJumping: false,
-        onGround: true,
-        mesh: null
-      },
-      surfaces: [],
-      surfaceMeshes: [],
-      keysPressed: {},
-      session: null,
-      renderer: null,
-      scene: null,
-      camera: null,
-      animationFrame: null,
-      hitTestSource: null,
-      referenceSpace: null
-    };
+  <div class="start" id="start">
+    <button id="startBtn">▶ Start AR</button>
+  </div>
+</div>
 
-    // DOM elements
-    const elements = {
-      container: document.getElementById('container'),
-      score: document.getElementById('score'),
-      message: document.getElementById('message'),
-      status: document.getElementById('status'),
-      controls: document.getElementById('controls'),
-      startSection: document.getElementById('start-section'),
-      instructions: document.getElementById('instructions'),
-      errorScreen: document.getElementById('error-screen'),
-      crosshair: document.getElementById('crosshair'),
-      btnStart: document.getElementById('btn-start'),
-      btnStop: document.getElementById('btn-stop'),
-      btnJump: document.getElementById('btn-jump'),
-      btnForward: document.getElementById('btn-forward'),
-      btnBackward: document.getElementById('btn-backward'),
-      btnLeft: document.getElementById('btn-left'),
-      btnRight: document.getElementById('btn-right')
-    };
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
-    // Initialize Three.js
-    async function initThree() {
-      state.scene = new THREE.Scene();
-      state.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-      
-      // Create XR-compatible WebGL context
-      const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl', { xrCompatible: true });
-      
-      state.renderer = new THREE.WebGLRenderer({ 
-        canvas: canvas,
-        context: gl,
-        antialias: true,
-        alpha: true
-      });
-      state.renderer.setPixelRatio(window.devicePixelRatio);
-      state.renderer.setSize(window.innerWidth, window.innerHeight);
-      state.renderer.xr.enabled = true;
-      elements.container.appendChild(state.renderer.domElement);
+<script>
+let scene, camera, renderer;
+let xrSession, refSpace;
+let planes = new Map();
+let surfaces = [];
+let character;
+let score = 0;
 
-      // Add lighting
-      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-      state.scene.add(light);
+const keys = { left:false, right:false, forward:false };
 
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-      directionalLight.position.set(1, 2, 1);
-      state.scene.add(directionalLight);
+const state = {
+  x:0, y:0, z:0,
+  vx:0, vy:0,
+  rot:0,
+  onGround:false
+};
 
-      // Create character (cute robot-like character)
-      createCharacter();
-    }
+async function init() {
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera();
 
-    function createCharacter() {
-      const character = new THREE.Group();
-      
-      // Body (green cube)
-      const bodyGeometry = new THREE.BoxGeometry(0.12, 0.15, 0.1);
-      const bodyMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x22c55e,
-        metalness: 0.3,
-        roughness: 0.7
-      });
-      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-      body.position.y = 0.075;
-      character.add(body);
+  renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true });
+  renderer.xr.enabled = true;
+  renderer.setSize(innerWidth, innerHeight);
+  document.getElementById("container").appendChild(renderer.domElement);
 
-      // Head (smaller cube on top)
-      const headGeometry = new THREE.BoxGeometry(0.08, 0.08, 0.08);
-      const headMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x10b981,
-        metalness: 0.3,
-        roughness: 0.7
-      });
-      const head = new THREE.Mesh(headGeometry, headMaterial);
-      head.position.y = 0.19;
-      character.add(head);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.2));
 
-      // Eyes (white spheres)
-      const eyeGeometry = new THREE.SphereGeometry(0.015, 8, 8);
-      const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
-      
-      const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-      leftEye.position.set(-0.02, 0.2, 0.04);
-      character.add(leftEye);
-      
-      const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-      rightEye.position.set(0.02, 0.2, 0.04);
-      character.add(rightEye);
+  createCartoonCharacter();
+}
 
-      // Arms
-      const armGeometry = new THREE.BoxGeometry(0.04, 0.12, 0.04);
-      const armMaterial = new THREE.MeshStandardMaterial({ color: 0x22c55e });
-      
-      const leftArm = new THREE.Mesh(armGeometry, armMaterial);
-      leftArm.position.set(-0.08, 0.08, 0);
-      character.add(leftArm);
-      
-      const rightArm = new THREE.Mesh(armGeometry, armMaterial);
-      rightArm.position.set(0.08, 0.08, 0);
-      character.add(rightArm);
+function createCartoonCharacter() {
+  character = new THREE.Group();
 
-      // Legs
-      const legGeometry = new THREE.BoxGeometry(0.04, 0.08, 0.04);
-      const legMaterial = new THREE.MeshStandardMaterial({ color: 0x10b981 });
-      
-      const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
-      leftLeg.position.set(-0.03, -0.04, 0);
-      character.add(leftLeg);
-      
-      const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
-      rightLeg.position.set(0.03, -0.04, 0);
-      character.add(rightLeg);
+  const body = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.07,0.12,4,8),
+    new THREE.MeshStandardMaterial({ color:0x22c55e })
+  );
+  body.position.y = 0.12;
+  character.add(body);
 
-      character.visible = false;
-      state.character.mesh = character;
-      state.scene.add(character);
-    }
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.06,16,16),
+    new THREE.MeshStandardMaterial({ color:0x10b981 })
+  );
+  head.position.y = 0.23;
+  character.add(head);
 
-    // Check AR support
-    async function checkARSupport() {
-      if (!navigator.xr) {
-        showError();
-        return false;
-      }
+  const eyeMat = new THREE.MeshBasicMaterial({ color:0xffffff });
+  const eyeGeo = new THREE.SphereGeometry(0.01,8,8);
 
-      try {
-        const supported = await navigator.xr.isSessionSupported('immersive-ar');
-        if (!supported) {
-          showError();
-          return false;
-        }
-        return true;
-      } catch (err) {
-        showError();
-        return false;
-      }
-    }
+  const e1 = new THREE.Mesh(eyeGeo,eyeMat);
+  e1.position.set(-0.02,0.24,0.05);
+  const e2 = e1.clone();
+  e2.position.x = 0.02;
 
-    function showError() {
-      elements.errorScreen.classList.remove('hidden');
-      elements.startSection.classList.add('hidden');
-      elements.instructions.classList.add('hidden');
-    }
+  character.add(e1,e2);
+  character.visible = false;
+  scene.add(character);
+}
 
-    function showMessage(text, duration = 0) {
-      elements.message.textContent = text;
-      elements.message.classList.remove('hidden');
-      if (duration > 0) {
-        setTimeout(() => elements.message.classList.add('hidden'), duration);
-      }
-    }
+async function startAR() {
+  xrSession = await navigator.xr.requestSession("immersive-ar", {
+    requiredFeatures:["plane-detection","local-floor","dom-overlay"],
+    domOverlay:{ root:document.body }
+  });
 
-    // Start AR session
-    async function startAR() {
-      try {
-        // Make sure WebGL context is XR compatible
-        const gl = state.renderer.getContext();
-        await gl.makeXRCompatible();
-        
-        state.session = await navigator.xr.requestSession('immersive-ar', {
-          requiredFeatures: ['hit-test', 'dom-overlay'],
-          domOverlay: { root: document.body }
-        });
+  renderer.xr.setSession(xrSession);
+  refSpace = await xrSession.requestReferenceSpace("local-floor");
 
-        state.session.updateRenderState({
-          baseLayer: new XRWebGLLayer(state.session, gl)
-        });
+  document.getElementById("start").classList.add("hidden");
+  document.getElementById("controls").classList.remove("hidden");
 
-        state.referenceSpace = await state.session.requestReferenceSpace('local');
-        const viewerSpace = await state.session.requestReferenceSpace('viewer');
-        state.hitTestSource = await state.session.requestHitTestSource({ space: viewerSpace });
+  renderer.setAnimationLoop(onXRFrame);
+}
 
-        state.renderer.xr.setReferenceSpaceType('local');
-        state.renderer.xr.setSession(state.session);
+function onXRFrame(t, frame) {
+  detectPlanes(frame);
+  updateCharacter();
+  renderer.render(scene,camera);
+}
 
-        state.arActive = true;
-        elements.startSection.classList.add('hidden');
-        elements.instructions.classList.add('hidden');
-        elements.crosshair.classList.remove('hidden');
-        showMessage('Move camera slowly over floor or table...');
+function detectPlanes(frame) {
+  frame.detectedPlanes.forEach(plane=>{
+    if(planes.has(plane)) return;
 
-        state.session.addEventListener('end', () => {
-          endAR();
-        });
+    const pose = frame.getPose(plane.planeSpace, refSpace);
+    if(!pose) return;
 
-        state.renderer.setAnimationLoop(onXRFrame);
-      } catch (err) {
-        showMessage('Failed to start AR: ' + err.message);
-        console.error(err);
-      }
-    }
-
-    // XR Frame loop
-    function onXRFrame(timestamp, frame) {
-      if (!frame || !state.session) return;
-
-      const pose = frame.getViewerPose(state.referenceSpace);
-      if (!pose) return;
-
-      // Hit testing for surface detection
-      if (state.hitTestSource) {
-        const hitTestResults = frame.getHitTestResults(state.hitTestSource);
-        
-        // Show detection feedback
-        if (hitTestResults.length > 0) {
-          if (!state.characterPlaced) {
-            const hit = hitTestResults[0];
-            const hitPose = hit.getPose(state.referenceSpace);
-
-            if (hitPose) {
-              const position = hitPose.transform.position;
-              
-              // Visual feedback - show where it's detecting
-              showMessage('Surface detected! Tap screen to place character');
-              
-              // Auto-place after 1 second of detection
-              if (!state.placeTimer) {
-                state.placeTimer = setTimeout(() => {
-                  placeCharacter(position);
-                }, 1000);
-              }
-            }
-          }
-          
-          // Continue detecting surfaces for physics
-          for (let i = 0; i < Math.min(hitTestResults.length, 3); i++) {
-            const hit = hitTestResults[i];
-            const hitPose = hit.getPose(state.referenceSpace);
-            
-            if (hitPose) {
-              const pos = hitPose.transform.position;
-              const exists = state.surfaces.some(s => 
-                Math.abs(s.x - pos.x) < 0.2 && 
-                Math.abs(s.z - pos.z) < 0.2
-              );
-              
-              if (!exists && state.surfaces.length < 10) {
-                state.surfaces.push({
-                  x: pos.x,
-                  y: pos.y,
-                  z: pos.z,
-                  width: 0.4
-                });
-              }
-            }
-          }
-        } else {
-          // No surfaces detected
-          if (!state.characterPlaced) {
-            showMessage('Move camera slowly over floor or table...');
-          }
-        }
-      }
-    }
-    
-    function placeCharacter(position) {
-      if (state.characterPlaced) return;
-      
-      // Place character
-      state.character.x = position.x;
-      state.character.y = position.y + state.character.size;
-      state.character.z = position.z;
-      state.characterPlaced = true;
-      
-      state.character.mesh.visible = true;
-      elements.status.classList.remove('hidden');
-      elements.controls.classList.remove('hidden');
-      elements.crosshair.classList.add('hidden');
-      showMessage('Character placed! Use controls to move', 2000);
-
-      // Create surface indicator
-      const surfaceGeometry = new THREE.CircleGeometry(0.3, 32);
-      const surfaceMaterial = new THREE.MeshBasicMaterial({ 
-        color: 0x22c55e,
-        transparent: true,
-        opacity: 0.3,
-        side: THREE.DoubleSide
-      });
-      const surface = new THREE.Mesh(surfaceGeometry, surfaceMaterial);
-      surface.rotation.x = -Math.PI / 2;
-      surface.position.set(position.x, position.y + 0.001, position.z);
-      state.scene.add(surface);
-      state.surfaceMeshes.push(surface);
-      
-      state.surfaces.push({
-        x: position.x,
-        y: position.y,
-        z: position.z,
-        width: 0.5
-      });
-    }
-
-      // Update character physics and position
-      updateCharacter();
-      
-      // Update character mesh position
-      if (state.character.mesh) {
-        state.character.mesh.position.set(
-          state.character.x,
-          state.character.y,
-          state.character.z
-        );
-        state.character.mesh.rotation.y = state.character.rotation;
-      }
-
-      // Render
-      state.renderer.render(state.scene, state.camera);
-    }
-
-    // Update character physics
-    function updateCharacter() {
-      const char = state.character;
-      const gravity = -0.008;
-      const moveSpeed = 0.015;
-      const friction = 0.85;
-
-      if (!char.onGround) {
-        char.vy += gravity;
-      }
-
-      if (state.keysPressed.forward) {
-        char.vz -= moveSpeed * Math.cos(char.rotation);
-        char.vx -= moveSpeed * Math.sin(char.rotation);
-      }
-      if (state.keysPressed.backward) {
-        char.vz += moveSpeed * Math.cos(char.rotation);
-        char.vx += moveSpeed * Math.sin(char.rotation);
-      }
-      if (state.keysPressed.left) {
-        char.rotation += 0.05;
-      }
-      if (state.keysPressed.right) {
-        char.rotation -= 0.05;
-      }
-
-      char.x += char.vx;
-      char.y += char.vy;
-      char.z += char.vz;
-
-      char.vx *= friction;
-      char.vz *= friction;
-
-      char.onGround = false;
-      for (const surface of state.surfaces) {
-        const distToSurface = char.y - char.size - surface.y;
-        const horizontalDist = Math.sqrt(
-          Math.pow(char.x - surface.x, 2) +
-          Math.pow(char.z - surface.z, 2)
-        );
-
-        if (Math.abs(distToSurface) < 0.05 && horizontalDist < surface.width && char.vy <= 0) {
-          char.y = surface.y + char.size;
-          char.vy = 0;
-          char.onGround = true;
-          char.isJumping = false;
-        }
-
-        if (char.onGround && horizontalDist < surface.width * 0.8) {
-          state.score = Math.max(state.score, Math.floor(horizontalDist * 100));
-          elements.score.textContent = state.score;
-        }
-      }
-
-      if (char.y < -1) {
-        char.y = char.size;
-        char.vy = 0;
-        char.onGround = true;
-      }
-    }
-
-    function jump() {
-      const char = state.character;
-      if (char.onGround && !char.isJumping) {
-        char.vy = 0.12;
-        char.isJumping = true;
-        char.onGround = false;
-        showMessage('Jump! 🦘', 800);
-      }
-    }
-
-    function endAR() {
-      if (state.session) {
-        state.session.end();
-        state.session = null;
-      }
-      state.renderer.setAnimationLoop(null);
-      state.arActive = false;
-      state.characterPlaced = false;
-      state.placeTimer = null;
-      state.character.mesh.visible = false;
-      
-      // Remove surface meshes
-      state.surfaceMeshes.forEach(mesh => state.scene.remove(mesh));
-      state.surfaceMeshes = [];
-      state.surfaces = [];
-      
-      elements.controls.classList.add('hidden');
-      elements.status.classList.add('hidden');
-      elements.startSection.classList.remove('hidden');
-      elements.instructions.classList.remove('hidden');
-      elements.crosshair.classList.add('hidden');
-      elements.message.classList.add('hidden');
-    }
-
-    // Event listeners
-    elements.btnStart.addEventListener('click', startAR);
-    elements.btnStop.addEventListener('click', endAR);
-    elements.btnJump.addEventListener('click', jump);
-
-    function setupButton(btn, key) {
-      btn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        state.keysPressed[key] = true;
-      });
-      btn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        state.keysPressed[key] = false;
-      });
-      btn.addEventListener('mousedown', () => state.keysPressed[key] = true);
-      btn.addEventListener('mouseup', () => state.keysPressed[key] = false);
-      btn.addEventListener('mouseleave', () => state.keysPressed[key] = false);
-    }
-
-    setupButton(elements.btnForward, 'forward');
-    setupButton(elements.btnBackward, 'backward');
-    setupButton(elements.btnLeft, 'left');
-    setupButton(elements.btnRight, 'right');
-
-    // Initialize
-    window.addEventListener('load', async () => {
-      await initThree();
-      checkARSupport();
+    const shape = new THREE.Shape();
+    plane.polygon.forEach((p,i)=>{
+      i===0 ? shape.moveTo(p.x,p.z) : shape.lineTo(p.x,p.z);
     });
-  </script>
+
+    const mesh = new THREE.Mesh(
+      new THREE.ShapeGeometry(shape),
+      new THREE.MeshBasicMaterial({
+        color:0x22c55e,
+        transparent:true,
+        opacity:0.35,
+        side:THREE.DoubleSide
+      })
+    );
+
+    mesh.rotation.x = -Math.PI/2;
+    mesh.position.set(
+      pose.transform.position.x,
+      pose.transform.position.y,
+      pose.transform.position.z
+    );
+
+    scene.add(mesh);
+    planes.set(plane,mesh);
+
+    surfaces.push({
+      y: mesh.position.y,
+      x: mesh.position.x,
+      z: mesh.position.z,
+      r:0.6
+    });
+
+    if(!character.visible){
+      state.x = mesh.position.x;
+      state.y = mesh.position.y + 0.14;
+      state.z = mesh.position.z;
+      character.visible = true;
+      document.getElementById("status").textContent = "Character placed ✔";
+    }
+  });
+}
+
+function updateCharacter(){
+  if(!character.visible) return;
+
+  if(keys.left) state.rot += 0.05;
+  if(keys.right) state.rot -= 0.05;
+  if(keys.forward){
+    state.vx -= Math.sin(state.rot)*0.01;
+    state.vz -= Math.cos(state.rot)*0.01;
+  }
+
+  state.vy -= 0.004;
+  state.x += state.vx;
+  state.y += state.vy;
+  state.z += state.vz;
+
+  state.vx *= 0.9;
+  state.vz *= 0.9;
+
+  state.onGround = false;
+  surfaces.forEach(s=>{
+    if(Math.abs(state.y - (s.y+0.14)) < 0.02){
+      state.y = s.y+0.14;
+      state.vy = 0;
+      state.onGround = true;
+    }
+  });
+
+  character.position.set(state.x,state.y,state.z);
+  character.rotation.y = state.rot;
+
+  score++;
+  document.getElementById("score").textContent = score;
+}
+
+function jump(){
+  if(state.onGround){
+    state.vy = 0.08;
+  }
+}
+
+document.getElementById("startBtn").onclick = startAR;
+document.getElementById("jump").onclick = jump;
+
+["left","right","forward"].forEach(k=>{
+  document.getElementById(k).onpointerdown=()=>keys[k]=true;
+  document.getElementById(k).onpointerup=()=>keys[k]=false;
+});
+
+init();
+</script>
 </body>
 </html>
