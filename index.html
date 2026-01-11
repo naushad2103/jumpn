@@ -316,6 +316,7 @@
     const state = {
       arActive: false,
       characterPlaced: false,
+      placeTimer: null,
       score: 0,
       character: {
         x: 0, y: 0, z: -1,
@@ -517,7 +518,7 @@
         elements.startSection.classList.add('hidden');
         elements.instructions.classList.add('hidden');
         elements.crosshair.classList.remove('hidden');
-        showMessage('Point at a surface to place your character!');
+        showMessage('Move camera slowly over floor or table...');
 
         state.session.addEventListener('end', () => {
           endAR();
@@ -540,48 +541,95 @@
       // Hit testing for surface detection
       if (state.hitTestSource) {
         const hitTestResults = frame.getHitTestResults(state.hitTestSource);
-        if (hitTestResults.length > 0 && !state.characterPlaced) {
-          const hit = hitTestResults[0];
-          const hitPose = hit.getPose(state.referenceSpace);
+        
+        // Show detection feedback
+        if (hitTestResults.length > 0) {
+          if (!state.characterPlaced) {
+            const hit = hitTestResults[0];
+            const hitPose = hit.getPose(state.referenceSpace);
 
-          if (hitPose) {
-            const position = hitPose.transform.position;
+            if (hitPose) {
+              const position = hitPose.transform.position;
+              
+              // Visual feedback - show where it's detecting
+              showMessage('Surface detected! Tap screen to place character');
+              
+              // Auto-place after 1 second of detection
+              if (!state.placeTimer) {
+                state.placeTimer = setTimeout(() => {
+                  placeCharacter(position);
+                }, 1000);
+              }
+            }
+          }
+          
+          // Continue detecting surfaces for physics
+          for (let i = 0; i < Math.min(hitTestResults.length, 3); i++) {
+            const hit = hitTestResults[i];
+            const hitPose = hit.getPose(state.referenceSpace);
             
-            // Place character
-            state.character.x = position.x;
-            state.character.y = position.y + state.character.size;
-            state.character.z = position.z;
-            state.characterPlaced = true;
-            
-            state.character.mesh.visible = true;
-            elements.status.classList.remove('hidden');
-            elements.controls.classList.remove('hidden');
-            elements.crosshair.classList.add('hidden');
-            showMessage('Character placed! Use controls to move', 2000);
-
-            // Create surface indicator
-            const surfaceGeometry = new THREE.CircleGeometry(0.3, 32);
-            const surfaceMaterial = new THREE.MeshBasicMaterial({ 
-              color: 0x22c55e,
-              transparent: true,
-              opacity: 0.3,
-              side: THREE.DoubleSide
-            });
-            const surface = new THREE.Mesh(surfaceGeometry, surfaceMaterial);
-            surface.rotation.x = -Math.PI / 2;
-            surface.position.set(position.x, position.y, position.z);
-            state.scene.add(surface);
-            state.surfaceMeshes.push(surface);
-            
-            state.surfaces.push({
-              x: position.x,
-              y: position.y,
-              z: position.z,
-              width: 0.3
-            });
+            if (hitPose) {
+              const pos = hitPose.transform.position;
+              const exists = state.surfaces.some(s => 
+                Math.abs(s.x - pos.x) < 0.2 && 
+                Math.abs(s.z - pos.z) < 0.2
+              );
+              
+              if (!exists && state.surfaces.length < 10) {
+                state.surfaces.push({
+                  x: pos.x,
+                  y: pos.y,
+                  z: pos.z,
+                  width: 0.4
+                });
+              }
+            }
+          }
+        } else {
+          // No surfaces detected
+          if (!state.characterPlaced) {
+            showMessage('Move camera slowly over floor or table...');
           }
         }
       }
+    }
+    
+    function placeCharacter(position) {
+      if (state.characterPlaced) return;
+      
+      // Place character
+      state.character.x = position.x;
+      state.character.y = position.y + state.character.size;
+      state.character.z = position.z;
+      state.characterPlaced = true;
+      
+      state.character.mesh.visible = true;
+      elements.status.classList.remove('hidden');
+      elements.controls.classList.remove('hidden');
+      elements.crosshair.classList.add('hidden');
+      showMessage('Character placed! Use controls to move', 2000);
+
+      // Create surface indicator
+      const surfaceGeometry = new THREE.CircleGeometry(0.3, 32);
+      const surfaceMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x22c55e,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide
+      });
+      const surface = new THREE.Mesh(surfaceGeometry, surfaceMaterial);
+      surface.rotation.x = -Math.PI / 2;
+      surface.position.set(position.x, position.y + 0.001, position.z);
+      state.scene.add(surface);
+      state.surfaceMeshes.push(surface);
+      
+      state.surfaces.push({
+        x: position.x,
+        y: position.y,
+        z: position.z,
+        width: 0.5
+      });
+    }
 
       // Update character physics and position
       updateCharacter();
@@ -679,6 +727,7 @@
       state.renderer.setAnimationLoop(null);
       state.arActive = false;
       state.characterPlaced = false;
+      state.placeTimer = null;
       state.character.mesh.visible = false;
       
       // Remove surface meshes
