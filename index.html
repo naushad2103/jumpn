@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Accurate WebXR Character Placement</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WebXR Walkable Rigged Character</title>
 
 <style>
 html,body{margin:0;overflow:hidden;background:#000;font-family:system-ui}
@@ -22,8 +22,8 @@ button.ctrl{padding:14px 18px;border-radius:14px;border:none;background:rgba(255
 <div id="ui">
   <div id="hint">Move phone to detect surface</div>
   <div id="controls" class="hidden">
-    <button class="ctrl" id="fwd">▲</button>
     <button class="ctrl" id="left">◀</button>
+    <button class="ctrl" id="forward">▲</button>
     <button class="ctrl" id="right">▶</button>
   </div>
   <div id="start">
@@ -33,11 +33,15 @@ button.ctrl{padding:14px 18px;border-radius:14px;border:none;background:rgba(255
 
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
+import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/loaders/GLTFLoader.js";
 
 let scene,camera,renderer;
 let session,refSpace,viewerSpace,hitTestSource;
-let reticle,character;
+let reticle;
+let character,mixer,actions={},activeAction;
 let placed=false;
+let keys={left:false,right:false,forward:false};
+let clock=new THREE.Clock();
 
 init();
 
@@ -50,39 +54,39 @@ function init(){
   renderer.setSize(innerWidth,innerHeight);
   document.body.appendChild(renderer.domElement);
 
-  scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.5));
+  scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.6));
 
   createReticle();
-  createCharacter();
+  loadCharacter();
 }
 
 function createReticle(){
-  const geo=new THREE.RingGeometry(0.06,0.08,32);
-  const mat=new THREE.MeshBasicMaterial({color:0x22c55e});
-  reticle=new THREE.Mesh(geo,mat);
+  reticle=new THREE.Mesh(
+    new THREE.RingGeometry(0.06,0.08,32),
+    new THREE.MeshBasicMaterial({color:0x22c55e})
+  );
   reticle.rotation.x=-Math.PI/2;
   reticle.visible=false;
   scene.add(reticle);
 }
 
-function createCharacter(){
-  character=new THREE.Group();
+function loadCharacter(){
+  new GLTFLoader().load(
+    "https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb",
+    gltf=>{
+      character=gltf.scene;
+      character.scale.setScalar(0.25);
+      character.visible=false;
+      scene.add(character);
 
-  const body=new THREE.Mesh(
-    new THREE.CylinderGeometry(0.06,0.06,0.14,16),
-    new THREE.MeshStandardMaterial({color:0x3b82f6})
+      mixer=new THREE.AnimationMixer(character);
+      gltf.animations.forEach(a=>{
+        actions[a.name]=mixer.clipAction(a);
+      });
+
+      play("Idle");
+    }
   );
-  body.position.y=0.07;
-
-  const head=new THREE.Mesh(
-    new THREE.SphereGeometry(0.05,16,16),
-    new THREE.MeshStandardMaterial({color:0xfbbf24})
-  );
-  head.position.y=0.15;
-
-  character.add(body,head);
-  character.visible=false;
-  scene.add(character);
 }
 
 async function startAR(){
@@ -103,7 +107,21 @@ async function startAR(){
   session.addEventListener("select",placeCharacter);
 }
 
+function placeCharacter(){
+  if(!reticle.visible || placed || !character) return;
+  placed=true;
+
+  character.position.copy(reticle.position);
+  character.visible=true;
+
+  document.getElementById("controls").classList.remove("hidden");
+  document.getElementById("hint").textContent="Use buttons to walk";
+}
+
 function onFrame(t,frame){
+  const dt=clock.getDelta();
+  if(mixer) mixer.update(dt);
+
   const hits=frame.getHitTestResults(hitTestSource);
   if(hits.length>0 && !placed){
     const pose=hits[0].getPose(refSpace);
@@ -114,21 +132,42 @@ function onFrame(t,frame){
       pose.transform.position.z
     );
   }
+
+  updateMovement();
   renderer.render(scene,camera);
 }
 
-function placeCharacter(){
-  if(!reticle.visible || placed) return;
-  placed=true;
+function updateMovement(){
+  if(!placed || !character) return;
 
-  character.position.copy(reticle.position);
-  character.visible=true;
+  let moving=false;
+  const speed=0.02;
 
-  document.getElementById("controls").classList.remove("hidden");
-  document.getElementById("hint").textContent="Character placed ✔";
+  if(keys.left) character.rotation.y+=0.05;
+  if(keys.right) character.rotation.y-=0.05;
+
+  if(keys.forward){
+    character.translateZ(-speed);
+    moving=true;
+  }
+
+  if(moving) play("Walking");
+  else play("Idle");
+}
+
+function play(name){
+  if(activeAction===actions[name]) return;
+  if(activeAction) activeAction.fadeOut(0.2);
+  activeAction=actions[name];
+  activeAction.reset().fadeIn(0.2).play();
 }
 
 document.getElementById("startBtn").onclick=startAR;
+
+["left","right","forward"].forEach(k=>{
+  document.getElementById(k).onpointerdown=()=>keys[k]=true;
+  document.getElementById(k).onpointerup=()=>keys[k]=false;
+});
 </script>
 </body>
 </html>
