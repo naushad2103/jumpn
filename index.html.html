@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AR Character Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #ar-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    .ui-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .header {
+      padding: 20px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .score-box {
+      background: rgba(255,255,255,0.2);
+      backdrop-filter: blur(10px);
+      padding: 12px 20px;
+      border-radius: 15px;
+      color: white;
+    }
+
+    .score-label {
+      font-size: 12px;
+      opacity: 0.7;
+    }
+
+    .score-value {
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .status-box {
+      background: rgba(34,197,94,0.3);
+      backdrop-filter: blur(10px);
+      padding: 8px 16px;
+      border-radius: 12px;
+      color: white;
+      font-size: 14px;
+    }
+
+    .message {
+      position: absolute;
+      top: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.2);
+      backdrop-filter: blur(10px);
+      padding: 12px 24px;
+      border-radius: 12px;
+      color: white;
+      font-size: 14px;
+      max-width: 80%;
+      text-align: center;
+    }
+
+    .controls {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      padding: 0 20px;
+      pointer-events: auto;
+      display: flex;
+      gap: 15px;
+      align-items: flex-end;
+    }
+
+    .dpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      flex: 1;
+      max-width: 300px;
+    }
+
+    .control-btn {
+      background: rgba(255,255,255,0.2);
+      backdrop-filter: blur(10px);
+      border: none;
+      color: white;
+      font-size: 18px;
+      padding: 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      touch-action: manipulation;
+      user-select: none;
+    }
+
+    .control-btn:active {
+      background: rgba(255,255,255,0.4);
+      transform: scale(0.95);
+    }
+
+    .jump-btn {
+      background: linear-gradient(135deg, #fbbf24, #f97316);
+      padding: 20px 28px;
+      border-radius: 50%;
+      font-weight: bold;
+      font-size: 16px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    }
+
+    .jump-btn:active {
+      transform: scale(0.9);
+    }
+
+    .stop-btn {
+      background: rgba(239,68,68,0.8);
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-weight: bold;
+    }
+
+    .start-section {
+      position: absolute;
+      bottom: 30px;
+      left: 30px;
+      right: 30px;
+      pointer-events: auto;
+    }
+
+    .start-btn {
+      width: 100%;
+      background: linear-gradient(to right, #3b82f6, #8b5cf6);
+      border: none;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      padding: 24px;
+      border-radius: 20px;
+      cursor: pointer;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      transition: transform 0.2s;
+    }
+
+    .start-btn:hover {
+      transform: scale(1.02);
+    }
+
+    .instructions {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(20px);
+      padding: 40px;
+      border-radius: 24px;
+      max-width: 500px;
+      color: white;
+    }
+
+    .instructions h1 {
+      font-size: 32px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .instructions p {
+      margin: 12px 0;
+      line-height: 1.6;
+    }
+
+    .error-screen {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(135deg, #1e1b4b, #581c87);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .error-box {
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(20px);
+      padding: 40px;
+      border-radius: 24px;
+      max-width: 500px;
+      color: white;
+      text-align: center;
+    }
+
+    .error-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+
+    .crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 48px;
+      height: 48px;
+      border: 4px solid #22c55e;
+      border-radius: 50%;
+      opacity: 0.5;
+      animation: pulse 2s infinite;
+    }
+
+    .crosshair::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 8px;
+      height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.1); }
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <canvas id="ar-canvas"></canvas>
+
+  <div class="ui-overlay">
+    <div class="header">
+      <div class="score-box">
+        <div class="score-label">Distance</div>
+        <div class="score-value" id="score">0</div>
+      </div>
+      <div class="status-box hidden" id="status">✓ Character Active</div>
+    </div>
+
+    <div class="message hidden" id="message"></div>
+
+    <div class="controls hidden" id="controls">
+      <div class="dpad">
+        <div></div>
+        <button class="control-btn" id="btn-forward">▲</button>
+        <div></div>
+        <button class="control-btn" id="btn-left">◀</button>
+        <button class="control-btn" id="btn-backward">▼</button>
+        <button class="control-btn" id="btn-right">▶</button>
+      </div>
+      <button class="control-btn jump-btn" id="btn-jump">JUMP</button>
+      <button class="control-btn stop-btn" id="btn-stop">Stop</button>
+    </div>
+
+    <div class="start-section" id="start-section">
+      <button class="start-btn" id="btn-start">▶ Start AR Character Game</button>
+    </div>
+
+    <div class="instructions" id="instructions">
+      <h1>AR Character Game</h1>
+      <p>🎮 Control a 3D character in AR</p>
+      <p>📱 Point camera at floor/table</p>
+      <p>🤖 Character auto-places on surface</p>
+      <p>⬆️ Use D-pad to move around</p>
+      <p>🦘 Jump button to leap</p>
+      <p>🧱 Collides with real objects</p>
+      <p>🏃 Walk on detected surfaces</p>
+    </div>
+
+    <div class="crosshair hidden" id="crosshair"></div>
+  </div>
+
+  <div class="error-screen hidden" id="error-screen">
+    <div class="error-box">
+      <div class="error-icon">⚠️</div>
+      <h2 style="font-size: 24px; margin-bottom: 16px;">AR Not Supported</h2>
+      <p style="margin-bottom: 12px;">WebAR requires a compatible device and browser. Please try:</p>
+      <ul style="text-align: left; margin-left: 20px; line-height: 1.8;">
+        <li>Android phone with ARCore support</li>
+        <li>Chrome or Edge browser</li>
+        <li>HTTPS connection</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // Game state
+    const state = {
+      arActive: false,
+      characterPlaced: false,
+      score: 0,
+      character: {
+        x: 0, y: 0, z: -1,
+        vx: 0, vy: 0, vz: 0,
+        rotation: 0,
+        size: 0.15,
+        isJumping: false,
+        onGround: true
+      },
+      surfaces: [],
+      keysPressed: {},
+      session: null,
+      gl: null,
+      animationFrame: null
+    };
+
+    // DOM elements
+    const elements = {
+      canvas: document.getElementById('ar-canvas'),
+      score: document.getElementById('score'),
+      message: document.getElementById('message'),
+      status: document.getElementById('status'),
+      controls: document.getElementById('controls'),
+      startSection: document.getElementById('start-section'),
+      instructions: document.getElementById('instructions'),
+      errorScreen: document.getElementById('error-screen'),
+      crosshair: document.getElementById('crosshair'),
+      btnStart: document.getElementById('btn-start'),
+      btnStop: document.getElementById('btn-stop'),
+      btnJump: document.getElementById('btn-jump'),
+      btnForward: document.getElementById('btn-forward'),
+      btnBackward: document.getElementById('btn-backward'),
+      btnLeft: document.getElementById('btn-left'),
+      btnRight: document.getElementById('btn-right')
+    };
+
+    // Check AR support
+    async function checkARSupport() {
+      if (!navigator.xr) {
+        showError();
+        return false;
+      }
+
+      try {
+        const supported = await navigator.xr.isSessionSupported('immersive-ar');
+        if (!supported) {
+          showError();
+          return false;
+        }
+        return true;
+      } catch (err) {
+        showError();
+        return false;
+      }
+    }
+
+    function showError() {
+      elements.errorScreen.classList.remove('hidden');
+      elements.startSection.classList.add('hidden');
+      elements.instructions.classList.add('hidden');
+    }
+
+    function showMessage(text, duration = 0) {
+      elements.message.textContent = text;
+      elements.message.classList.remove('hidden');
+      if (duration > 0) {
+        setTimeout(() => elements.message.classList.add('hidden'), duration);
+      }
+    }
+
+    // Start AR session
+    async function startAR() {
+      try {
+        state.session = await navigator.xr.requestSession('immersive-ar', {
+          requiredFeatures: ['hit-test', 'dom-overlay'],
+          domOverlay: { root: document.body }
+        });
+
+        state.gl = elements.canvas.getContext('webgl', { xrCompatible: true });
+        await state.gl.makeXRCompatible();
+
+        const layer = new XRWebGLLayer(state.session, state.gl);
+        await state.session.updateRenderState({ baseLayer: layer });
+
+        const referenceSpace = await state.session.requestReferenceSpace('local');
+        const viewerSpace = await state.session.requestReferenceSpace('viewer');
+        const hitTestSource = await state.session.requestHitTestSource({ space: viewerSpace });
+
+        state.arActive = true;
+        elements.startSection.classList.add('hidden');
+        elements.instructions.classList.add('hidden');
+        elements.crosshair.classList.remove('hidden');
+        showMessage('Point at a surface to place your character!');
+
+        state.session.addEventListener('end', () => {
+          endAR();
+        });
+
+        function onXRFrame(time, frame) {
+          state.animationFrame = state.session.requestAnimationFrame(onXRFrame);
+
+          const pose = frame.getViewerPose(referenceSpace);
+          if (!pose) return;
+
+          const hitTestResults = frame.getHitTestResults(hitTestSource);
+          if (hitTestResults.length > 0) {
+            const hit = hitTestResults[0];
+            const hitPose = hit.getPose(referenceSpace);
+
+            const surfaceExists = state.surfaces.some(s =>
+              Math.abs(s.x - hitPose.transform.position.x) < 0.15 &&
+              Math.abs(s.z - hitPose.transform.position.z) < 0.15
+            );
+
+            if (!surfaceExists) {
+              const surface = {
+                x: hitPose.transform.position.x,
+                y: hitPose.transform.position.y,
+                z: hitPose.transform.position.z,
+                width: 0.3,
+                height: 0.05
+              };
+              state.surfaces.push(surface);
+
+              if (!state.characterPlaced) {
+                state.character.x = surface.x;
+                state.character.y = surface.y + state.character.size;
+                state.character.z = surface.z;
+                state.characterPlaced = true;
+                elements.status.classList.remove('hidden');
+                elements.controls.classList.remove('hidden');
+                elements.crosshair.classList.add('hidden');
+                showMessage('Character placed! Use controls to move', 2000);
+              }
+            }
+          }
+
+          const view = pose.views[0];
+          const viewport = state.session.renderState.baseLayer.getViewport(view);
+          state.gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+
+          state.gl.clearColor(0, 0, 0, 0);
+          state.gl.clear(state.gl.COLOR_BUFFER_BIT | state.gl.DEPTH_BUFFER_BIT);
+          state.gl.enable(state.gl.DEPTH_TEST);
+
+          updateCharacter();
+        }
+
+        state.session.requestAnimationFrame(onXRFrame);
+      } catch (err) {
+        showMessage('Failed to start AR: ' + err.message);
+      }
+    }
+
+    // Update character physics
+    function updateCharacter() {
+      const char = state.character;
+      const gravity = -0.008;
+      const moveSpeed = 0.015;
+      const friction = 0.85;
+
+      if (!char.onGround) {
+        char.vy += gravity;
+      }
+
+      if (state.keysPressed.forward) {
+        char.vz -= moveSpeed * Math.cos(char.rotation);
+        char.vx -= moveSpeed * Math.sin(char.rotation);
+      }
+      if (state.keysPressed.backward) {
+        char.vz += moveSpeed * Math.cos(char.rotation);
+        char.vx += moveSpeed * Math.sin(char.rotation);
+      }
+      if (state.keysPressed.left) {
+        char.rotation += 0.05;
+      }
+      if (state.keysPressed.right) {
+        char.rotation -= 0.05;
+      }
+
+      char.x += char.vx;
+      char.y += char.vy;
+      char.z += char.vz;
+
+      char.vx *= friction;
+      char.vz *= friction;
+
+      char.onGround = false;
+      for (const surface of state.surfaces) {
+        const distToSurface = char.y - char.size - surface.y;
+        const horizontalDist = Math.sqrt(
+          Math.pow(char.x - surface.x, 2) +
+          Math.pow(char.z - surface.z, 2)
+        );
+
+        if (Math.abs(distToSurface) < 0.05 && horizontalDist < surface.width && char.vy <= 0) {
+          char.y = surface.y + char.size;
+          char.vy = 0;
+          char.onGround = true;
+          char.isJumping = false;
+        }
+
+        if (char.onGround && horizontalDist < surface.width * 0.8) {
+          state.score = Math.max(state.score, Math.floor(horizontalDist * 100));
+          elements.score.textContent = state.score;
+        }
+      }
+
+      if (char.y < 0) {
+        char.y = char.size;
+        char.vy = 0;
+        char.onGround = true;
+      }
+    }
+
+    function jump() {
+      const char = state.character;
+      if (char.onGround && !char.isJumping) {
+        char.vy = 0.12;
+        char.isJumping = true;
+        char.onGround = false;
+        showMessage('Jump! 🦘', 800);
+      }
+    }
+
+    function endAR() {
+      if (state.session) {
+        state.session.end();
+        state.session = null;
+      }
+      if (state.animationFrame) {
+        cancelAnimationFrame(state.animationFrame);
+      }
+      state.arActive = false;
+      state.characterPlaced = false;
+      elements.controls.classList.add('hidden');
+      elements.status.classList.add('hidden');
+      elements.startSection.classList.remove('hidden');
+      elements.instructions.classList.remove('hidden');
+      elements.crosshair.classList.add('hidden');
+      elements.message.classList.add('hidden');
+    }
+
+    // Event listeners
+    elements.btnStart.addEventListener('click', startAR);
+    elements.btnStop.addEventListener('click', endAR);
+    elements.btnJump.addEventListener('click', jump);
+
+    function setupButton(btn, key) {
+      btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        state.keysPressed[key] = true;
+      });
+      btn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        state.keysPressed[key] = false;
+      });
+      btn.addEventListener('mousedown', () => state.keysPressed[key] = true);
+      btn.addEventListener('mouseup', () => state.keysPressed[key] = false);
+    }
+
+    setupButton(elements.btnForward, 'forward');
+    setupButton(elements.btnBackward, 'backward');
+    setupButton(elements.btnLeft, 'left');
+    setupButton(elements.btnRight, 'right');
+
+    // Initialize
+    checkARSupport();
+  </script>
+</body>
+</html>
