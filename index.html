@@ -1,23 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1.0" />
-<title>WebAR Cartoon Character</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebAR Cartoon Game</title>
 
 <style>
-html,body { margin:0; padding:0; overflow:hidden; background:#000; font-family:system-ui }
-#container { position:fixed; inset:0 }
-.ui { position:fixed; inset:0; pointer-events:none; color:#fff }
-.top { display:flex; justify-content:space-between; padding:14px }
-.box { background:rgba(0,0,0,.55); padding:10px 14px; border-radius:12px }
-.controls { position:absolute; bottom:20px; left:0; right:0; display:flex; justify-content:center; gap:10px; pointer-events:auto }
-.btn { padding:16px; border-radius:14px; border:none; background:rgba(255,255,255,.25); color:#fff; font-size:18px }
-.jump { background:linear-gradient(135deg,#22c55e,#16a34a) }
-.start { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:auto }
-.start button { padding:22px 30px; font-size:20px; border-radius:18px; border:none; color:#fff;
-  background:linear-gradient(135deg,#3b82f6,#8b5cf6) }
-.hidden { display:none }
+html,body{margin:0;padding:0;overflow:hidden;background:#000;font-family:system-ui}
+#container{position:fixed;inset:0}
+.ui{position:fixed;inset:0;pointer-events:none;color:#fff}
+.top{display:flex;justify-content:space-between;padding:14px}
+.box{background:rgba(0,0,0,.55);padding:10px 14px;border-radius:12px}
+.controls{position:absolute;bottom:20px;left:0;right:0;display:flex;justify-content:center;gap:10px;pointer-events:auto}
+.btn{padding:16px;border-radius:14px;border:none;background:rgba(255,255,255,.25);color:#fff;font-size:18px}
+.jump{background:linear-gradient(135deg,#22c55e,#16a34a)}
+.start{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:auto}
+.start button{padding:22px 30px;font-size:20px;border-radius:18px;border:none;color:#fff;background:linear-gradient(135deg,#3b82f6,#8b5cf6)}
+.hidden{display:none}
 </style>
 </head>
 
@@ -26,8 +25,8 @@ html,body { margin:0; padding:0; overflow:hidden; background:#000; font-family:s
 
 <div class="ui">
   <div class="top">
-    <div class="box">Score: <span id="score">0</span></div>
-    <div class="box" id="status">Searching surface…</div>
+    <div class="box">Distance: <span id="score">0</span></div>
+    <div class="box" id="status">Tap to place character</div>
   </div>
 
   <div class="controls hidden" id="controls">
@@ -45,137 +44,157 @@ html,body { margin:0; padding:0; overflow:hidden; background:#000; font-family:s
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
 
-let scene, camera, renderer;
-let xrSession, refSpace;
-let planes = new Map();
-let surfaces = [];
-let character, score = 0;
+let scene,camera,renderer;
+let xrSession,refSpace,viewerSpace,hitTestSource;
+let reticle,character,occluder;
+let placed=false,score=0;
 
-const keys = { left:false, right:false, forward:false };
-const state = { x:0, y:0, z:0, vx:0, vy:0, rot:0, onGround:false };
+const keys={left:false,right:false,forward:false};
+const state={x:0,y:0,z:0,vx:0,vy:0,rot:0,onGround:false};
 
 init();
 
 function init(){
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera();
-  renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true });
-  renderer.xr.enabled = true;
-  renderer.setSize(innerWidth, innerHeight);
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera();
+
+  renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});
+  renderer.xr.enabled=true;
+  renderer.setSize(innerWidth,innerHeight);
   document.getElementById("container").appendChild(renderer.domElement);
 
-  scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.3));
+  scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.4));
+
+  createReticle();
   createCharacter();
+  createOccluder();
+}
+
+function createReticle(){
+  const geo=new THREE.RingGeometry(0.07,0.09,32).rotateX(-Math.PI/2);
+  const mat=new THREE.MeshBasicMaterial({color:0x22c55e});
+  reticle=new THREE.Mesh(geo,mat);
+  reticle.visible=false;
+  scene.add(reticle);
 }
 
 function createCharacter(){
-  character = new THREE.Group();
+  character=new THREE.Group();
 
-  const body = new THREE.Mesh(
+  const body=new THREE.Mesh(
     new THREE.CapsuleGeometry(0.07,0.12,4,8),
-    new THREE.MeshStandardMaterial({ color:0x22c55e })
+    new THREE.MeshStandardMaterial({color:0x22c55e})
   );
-  body.position.y = 0.12;
+  body.position.y=0.12;
 
-  const head = new THREE.Mesh(
+  const head=new THREE.Mesh(
     new THREE.SphereGeometry(0.06,16,16),
-    new THREE.MeshStandardMaterial({ color:0x10b981 })
+    new THREE.MeshStandardMaterial({color:0x10b981})
   );
-  head.position.y = 0.23;
+  head.position.y=0.23;
 
-  const eyeGeo = new THREE.SphereGeometry(0.01,8,8);
-  const eyeMat = new THREE.MeshBasicMaterial({ color:0xffffff });
-
-  const e1 = new THREE.Mesh(eyeGeo,eyeMat);
-  const e2 = e1.clone();
-  e1.position.set(-0.02,0.24,0.05);
-  e2.position.set( 0.02,0.24,0.05);
-
-  character.add(body, head, e1, e2);
-  character.visible = false;
+  character.add(body,head);
+  character.visible=false;
   scene.add(character);
 }
 
+function createOccluder(){
+  const geo=new THREE.PlaneGeometry(5,5);
+  const mat=new THREE.MeshStandardMaterial({
+    colorWrite:false
+  });
+  occluder=new THREE.Mesh(geo,mat);
+  occluder.rotation.x=-Math.PI/2;
+  occluder.visible=false;
+  scene.add(occluder);
+}
+
 async function startAR(){
-  xrSession = await navigator.xr.requestSession("immersive-ar", {
-    requiredFeatures: ["hit-test"],
-    optionalFeatures: ["plane-detection","local-floor","dom-overlay"],
-    domOverlay: { root: document.body }
+  xrSession=await navigator.xr.requestSession("immersive-ar",{
+    requiredFeatures:["hit-test"],
+    optionalFeatures:["depth-sensing","dom-overlay","local-floor"],
+    domOverlay:{root:document.body}
   });
 
   renderer.xr.setSession(xrSession);
-  refSpace = await xrSession.requestReferenceSpace("local-floor");
-  renderer.setAnimationLoop(onXRFrame);
+  refSpace=await xrSession.requestReferenceSpace("local-floor");
+  viewerSpace=await xrSession.requestReferenceSpace("viewer");
+  hitTestSource=await xrSession.requestHitTestSource({space:viewerSpace});
 
+  renderer.setAnimationLoop(onXRFrame);
   document.getElementById("start").classList.add("hidden");
-  document.getElementById("controls").classList.remove("hidden");
+
+  xrSession.addEventListener("select",placeCharacter);
 }
 
-function onXRFrame(t, frame){
-  detectPlanes(frame);
+function onXRFrame(t,frame){
+  const hitResults=frame.getHitTestResults(hitTestSource);
+  if(hitResults.length>0 && !placed){
+    const pose=hitResults[0].getPose(refSpace);
+    reticle.visible=true;
+    reticle.position.set(
+      pose.transform.position.x,
+      pose.transform.position.y,
+      pose.transform.position.z
+    );
+  }
   updateCharacter();
   renderer.render(scene,camera);
 }
 
-function detectPlanes(frame){
-  if(!frame.detectedPlanes) return;
+function placeCharacter(){
+  if(!reticle.visible||placed) return;
+  placed=true;
 
-  frame.detectedPlanes.forEach(plane=>{
-    if(planes.has(plane)) return;
-    const pose = frame.getPose(plane.planeSpace, refSpace);
-    if(!pose) return;
+  state.x=reticle.position.x;
+  state.y=reticle.position.y+0.14;
+  state.z=reticle.position.z;
 
-    const shape = new THREE.Shape();
-    plane.polygon.forEach((p,i)=> i?shape.lineTo(p.x,p.z):shape.moveTo(p.x,p.z));
+  character.visible=true;
+  reticle.visible=false;
 
-    const mesh = new THREE.Mesh(
-      new THREE.ShapeGeometry(shape),
-      new THREE.MeshBasicMaterial({ color:0x22c55e, transparent:true, opacity:0.35, side:THREE.DoubleSide })
-    );
+  occluder.position.set(state.x,state.y-0.14,state.z);
+  occluder.visible=true;
 
-    mesh.rotation.x = -Math.PI/2;
-    mesh.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
-    scene.add(mesh);
-    planes.set(plane, mesh);
-
-    surfaces.push({ y: mesh.position.y });
-
-    if(!character.visible){
-      state.y = mesh.position.y + 0.14;
-      character.visible = true;
-      document.getElementById("status").textContent = "Character placed ✔";
-    }
-  });
+  document.getElementById("controls").classList.remove("hidden");
+  document.getElementById("status").textContent="Character placed ✔";
 }
 
 function updateCharacter(){
-  if(!character.visible) return;
+  if(!placed) return;
 
-  if(keys.left) state.rot += 0.05;
-  if(keys.right) state.rot -= 0.05;
+  const speed=0.012;
+  const gravity=0.005;
+
+  if(keys.left) state.rot+=0.05;
+  if(keys.right) state.rot-=0.05;
   if(keys.forward){
-    state.vx -= Math.sin(state.rot)*0.01;
-    state.vz -= Math.cos(state.rot)*0.01;
+    state.vx-=Math.sin(state.rot)*speed;
+    state.vz-=Math.cos(state.rot)*speed;
   }
 
-  state.vy -= 0.004;
-  state.x += state.vx; state.y += state.vy; state.z += state.vz;
-  state.vx *= 0.9; state.vz *= 0.9;
+  state.vy-=gravity;
+  state.x+=state.vx;
+  state.y+=state.vy;
+  state.z+=state.vz;
 
-  surfaces.forEach(s=>{
-    if(Math.abs(state.y-(s.y+0.14))<0.02){
-      state.y=s.y+0.14; state.vy=0; state.onGround=true;
-    }
-  });
+  state.vx*=0.85;
+  state.vz*=0.85;
+
+  if(state.y<occluder.position.y+0.14){
+    state.y=occluder.position.y+0.14;
+    state.vy=0;
+    state.onGround=true;
+  }
 
   character.position.set(state.x,state.y,state.z);
-  character.rotation.y = state.rot;
-
-  document.getElementById("score").textContent = score++;
+  character.rotation.y=state.rot;
+  score++;
+  document.getElementById("score").textContent=score;
 }
 
-document.getElementById("startBtn").onclick = startAR;
-document.getElementById("jump").onclick = ()=> state.onGround && (state.vy=0.08);
+document.getElementById("startBtn").onclick=startAR;
+document.getElementById("jump").onclick=()=>state.onGround&&(state.vy=0.09);
 
 ["left","right","forward"].forEach(k=>{
   document.getElementById(k).onpointerdown=()=>keys[k]=true;
